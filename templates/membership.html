@@ -1,0 +1,615 @@
+<title>Membership Stage Tracker</title>
+<style>
+:root {
+  --bg:#0C1526;--surface:#152035;--card:#1D2F4A;--border:#253859;
+  --txt:#D8E6F5;--txt-mute:#6A8AAD;--accent:#1DD6AA;
+  --warn:#F59E0B;--danger:#e05252;--ok:#1DD6AA;
+  --radius:6px;--font-ui:system-ui,-apple-system,sans-serif;--font-serif:Georgia,'Times New Roman',serif;
+}
+@media(prefers-color-scheme:light){:root{--bg:#F2F5FA;--surface:#fff;--card:#fff;--border:#D4DEF0;--txt:#0C1526;--txt-mute:#6A7FA0;--accent:#0FB892;}}
+:root[data-theme="dark"]{--bg:#0C1526;--surface:#152035;--card:#1D2F4A;--border:#253859;--txt:#D8E6F5;--txt-mute:#6A8AAD;--accent:#1DD6AA;}
+:root[data-theme="light"]{--bg:#F2F5FA;--surface:#fff;--card:#fff;--border:#D4DEF0;--txt:#0C1526;--txt-mute:#6A7FA0;--accent:#0FB892;}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{font-family:var(--font-ui);background:var(--bg);color:var(--txt);min-height:100vh;padding:32px 24px 64px;line-height:1.5;transition:background .2s,color .2s;}
+
+.header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;}
+.header-title h1{font-family:var(--font-serif);font-size:24px;font-weight:normal;letter-spacing:-.3px;}
+.header-title p{font-size:12px;color:var(--txt-mute);margin-top:4px;letter-spacing:.03em;text-transform:uppercase;}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.btn{border-radius:var(--radius);padding:8px 14px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;font-family:var(--font-ui);border:none;white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#0C1526;}.btn-primary:hover{opacity:.85;}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--txt-mute);}.btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+
+/* Upcoming strip */
+.upcoming{margin-bottom:20px;display:none;}
+.upcoming.has-items{display:block;}
+.upcoming-head{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-mute);margin-bottom:8px;font-weight:600;}
+.upcoming-list{display:flex;gap:8px;flex-wrap:wrap;}
+.upcoming-chip{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s;}
+.upcoming-chip:hover{border-color:var(--accent);}
+.upcoming-chip.overdue{border-color:var(--danger);background:color-mix(in srgb,var(--surface) 92%,var(--danger));}
+.upcoming-chip.soon{border-color:var(--warn);background:color-mix(in srgb,var(--surface) 92%,var(--warn));}
+.chip-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.chip-name{font-size:12px;font-weight:600;}
+.chip-meta{font-size:11px;color:var(--txt-mute);}
+
+/* Pipeline */
+.pipeline{display:flex;margin-bottom:24px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.stage-step{flex:1;padding:16px 14px;cursor:pointer;position:relative;border-right:1px solid var(--border);transition:background .15s;user-select:none;}
+.stage-step:last-child{border-right:none;}
+.stage-step:hover,.stage-step.active-filter{background:var(--card);}
+.stage-step.active-filter::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--step-color);}
+.step-label{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-mute);margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+.step-dot{width:7px;height:7px;border-radius:50%;background:var(--step-color);flex-shrink:0;}
+.step-count{font-family:var(--font-serif);font-size:28px;color:var(--txt);line-height:1;font-variant-numeric:tabular-nums;}
+.step-sub{font-size:11px;color:var(--txt-mute);margin-top:3px;}
+
+/* Import */
+.import-label{display:block;cursor:pointer;}
+.import-banner{background:var(--surface);border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;margin-bottom:24px;transition:border-color .2s,background .2s;}
+.import-label:hover .import-banner,.import-banner.drag-over{border-color:var(--accent);background:color-mix(in srgb,var(--surface) 90%,var(--accent));}
+.import-banner h3{font-size:15px;font-weight:600;margin-bottom:4px;}
+.import-banner p{font-size:12px;color:var(--txt-mute);}
+.import-banner .field-hint{font-size:11px;color:var(--txt-mute);margin-top:10px;font-family:monospace;background:var(--card);padding:4px 10px;border-radius:4px;display:inline-block;}
+input[type=file]{display:none;}
+
+/* Controls */
+.controls{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+.search{flex:1;min-width:180px;background:var(--surface);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:8px 12px;font-size:13px;font-family:var(--font-ui);outline:none;}
+.search:focus{border-color:var(--accent);}
+.search::placeholder{color:var(--txt-mute);}
+.stale-filter{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-mute);cursor:pointer;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);user-select:none;}
+.stale-filter input{accent-color:var(--accent);cursor:pointer;}
+.stale-filter:has(input:checked){border-color:var(--warn);color:var(--warn);}
+
+/* Table */
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{background:var(--surface);padding:10px 14px;text-align:left;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-mute);font-weight:600;white-space:nowrap;border-bottom:1px solid var(--border);}
+thead th:first-child{padding-left:0;width:4px;}
+tbody tr{border-bottom:1px solid var(--border);background:var(--surface);transition:background .1s;cursor:pointer;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--card);}
+tbody tr.stale-row{background:color-mix(in srgb,var(--surface) 92%,var(--warn));}
+td{padding:11px 14px;vertical-align:middle;font-variant-numeric:tabular-nums;}
+td:first-child{padding:0;width:4px;}
+.stage-stripe{width:4px;min-height:44px;display:block;}
+.member-name{font-weight:600;}
+.member-sub{color:var(--txt-mute);font-size:11px;margin-top:2px;}
+.stage-pill{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border:1px solid currentColor;cursor:pointer;}
+.stale-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--warn);background:rgba(245,158,11,.1);padding:2px 8px;border-radius:20px;border:1px solid rgba(245,158,11,.3);}
+.days-mute{color:var(--txt-mute);}
+.mtg-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid;white-space:nowrap;}
+.mtg-badge.overdue{color:var(--danger);border-color:rgba(224,82,82,.3);background:rgba(224,82,82,.08);}
+.mtg-badge.soon{color:var(--warn);border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08);}
+.mtg-badge.future{color:var(--accent);border-color:rgba(29,214,170,.3);background:rgba(29,214,170,.08);}
+.mtg-badge.none{color:var(--txt-mute);border-color:var(--border);background:none;cursor:pointer;}
+.action-btn{background:none;border:1px solid var(--border);color:var(--txt-mute);border-radius:var(--radius);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--font-ui);}
+.action-btn:hover{border-color:var(--danger);color:var(--danger);}
+.empty-state{text-align:center;padding:56px 24px;color:var(--txt-mute);background:var(--surface);}
+.empty-state .empty-icon{font-size:36px;margin-bottom:12px;}
+.empty-state strong{display:block;color:var(--txt);margin-bottom:6px;}
+
+/* Stage picker */
+.picker-wrap{position:relative;display:inline-block;}
+.stage-select{position:absolute;top:calc(100% + 4px);left:0;z-index:100;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.3);display:none;min-width:140px;}
+.stage-select.open{display:block;}
+.stage-option{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--txt);}
+.stage-option:hover{background:var(--surface);}
+.opt-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* Timeline panel */
+.tl-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);}
+.tl-overlay.open{display:block;}
+.tl-panel{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:100vw;background:var(--card);border-left:1px solid var(--border);z-index:201;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;}
+.tl-panel.open{transform:translateX(0);}
+.tl-head{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tl-head-name{font-weight:700;font-size:16px;margin-bottom:2px;}
+.tl-head-sub{font-size:12px;color:var(--txt-mute);}
+.tl-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--txt-mute);font-size:20px;cursor:pointer;line-height:1;padding:4px;}
+.tl-close:hover{color:var(--txt);}
+.tl-body{flex:1;overflow-y:auto;padding:20px;}
+.tl-section{margin-bottom:24px;}
+.tl-section-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-mute);font-weight:600;margin-bottom:12px;}
+.tl-empty{font-size:12px;color:var(--txt-mute);padding:12px 0;}
+
+/* Meeting cards in timeline */
+.mtg-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;position:relative;}
+.mtg-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.mtg-card-type{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+.mtg-card-date{font-size:12px;color:var(--txt-mute);}
+.mtg-card-date.overdue{color:var(--danger);}
+.mtg-card-date.soon{color:var(--warn);}
+.mtg-card-notes{font-size:12px;color:var(--txt-mute);margin-top:4px;line-height:1.5;}
+.mtg-del{position:absolute;top:10px;right:10px;background:none;border:none;color:var(--txt-mute);cursor:pointer;font-size:13px;opacity:0;transition:opacity .15s;}
+.mtg-card:hover .mtg-del{opacity:1;}
+.mtg-del:hover{color:var(--danger);}
+
+/* Add meeting form */
+.add-mtg-form{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;}
+.form-row{margin-bottom:10px;}
+.form-label{font-size:11px;color:var(--txt-mute);font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px;display:block;}
+.form-input{width:100%;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:7px 10px;font-size:13px;font-family:var(--font-ui);outline:none;}
+.form-input:focus{border-color:var(--accent);}
+.form-select{width:100%;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:7px 10px;font-size:13px;font-family:var(--font-ui);outline:none;cursor:pointer;}
+.form-select:focus{border-color:var(--accent);}
+.form-textarea{width:100%;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:7px 10px;font-size:13px;font-family:var(--font-ui);outline:none;resize:vertical;min-height:60px;}
+.form-textarea:focus{border-color:var(--accent);}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
+
+/* Confirm panel */
+.confirm-panel{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.7);backdrop-filter:blur(3px);padding:24px;overflow-y:auto;}
+.confirm-panel.open{display:flex;flex-direction:column;}
+.confirm-box{background:var(--card);border:1px solid var(--border);border-radius:14px;width:100%;max-width:700px;margin:auto;display:flex;flex-direction:column;max-height:85vh;}
+.confirm-head{padding:24px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.confirm-head h2{font-family:var(--font-serif);font-size:20px;font-weight:normal;margin-bottom:4px;}
+.confirm-head p{font-size:12px;color:var(--txt-mute);}
+.confirm-sel-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;font-size:12px;gap:10px;flex-wrap:wrap;}
+.sel-count{color:var(--txt-mute);}.sel-count strong{color:var(--accent);}
+.sel-btns{display:flex;gap:6px;}
+.sel-link{background:none;border:none;color:var(--txt-mute);font-size:12px;cursor:pointer;padding:4px 8px;border-radius:4px;font-family:var(--font-ui);}
+.sel-link:hover{color:var(--accent);}
+.confirm-scroll{overflow-y:auto;flex:1;}
+.confirm-table{width:100%;border-collapse:collapse;font-size:13px;}
+.confirm-table thead th{background:var(--surface);padding:9px 14px;text-align:left;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-mute);position:sticky;top:0;}
+.confirm-table tbody tr{border-bottom:1px solid var(--border);}
+.confirm-table tbody tr:last-child{border-bottom:none;}
+.confirm-table tbody tr:hover{background:var(--surface);}
+.confirm-table tbody tr.row-selected{background:color-mix(in srgb,var(--card) 85%,var(--accent));}
+.confirm-table td{padding:10px 14px;vertical-align:middle;}
+.confirm-table input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:pointer;}
+.confirm-foot{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.3);opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;z-index:400;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.ok{border-color:var(--accent);color:var(--accent);}
+</style>
+
+<div class="header">
+  <div class="header-title">
+    <h1>Membership Tracker</h1>
+    <p>Scanned contacts · <span id="total-count">0</span> people</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-outline" onclick="exportCSV()">Export CSV</button>
+    <button class="btn btn-outline" onclick="toggleTheme()">Toggle theme</button>
+  </div>
+</div>
+
+<!-- Upcoming meetings -->
+<div class="upcoming" id="upcoming-wrap">
+  <div class="upcoming-head">Upcoming meetings</div>
+  <div class="upcoming-list" id="upcoming-list"></div>
+</div>
+
+<!-- Import -->
+<label class="import-label" id="drop-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+  <input type="file" id="csv-file" accept=".csv" onchange="importCSV(this)">
+  <div class="import-banner" id="import-banner">
+    <div style="font-size:28px;margin-bottom:8px;">📋</div>
+    <h3>Import from CardCRM CSV</h3>
+    <p>Drop your exported CSV here, or click to select</p>
+    <div class="field-hint">name_en · name_kr · email · company_en · company_kr · title_en · title_kr</div>
+  </div>
+</label>
+
+<!-- Pipeline -->
+<div class="pipeline" id="pipeline"></div>
+
+<!-- Controls -->
+<div class="controls">
+  <input class="search" type="text" placeholder="Search by name, email, or company…" oninput="render()" id="search">
+  <label class="stale-filter">
+    <input type="checkbox" id="stale-only" onchange="render()">
+    Needs follow-up
+  </label>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Contact</th>
+        <th>Stage</th>
+        <th>Company / Title</th>
+        <th>Next Meeting</th>
+        <th>Follow-up</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<!-- Timeline panel -->
+<div class="tl-overlay" id="tl-overlay" onclick="closeTL()"></div>
+<div class="tl-panel" id="tl-panel">
+  <button class="tl-close" onclick="closeTL()">✕</button>
+  <div class="tl-head">
+    <div class="tl-head-name" id="tl-name"></div>
+    <div class="tl-head-sub" id="tl-sub"></div>
+  </div>
+  <div class="tl-body" id="tl-body"></div>
+</div>
+
+<!-- Confirm panel -->
+<div class="confirm-panel" id="confirm-panel">
+  <div class="confirm-box">
+    <div class="confirm-head">
+      <h2>Select contacts to track</h2>
+      <p id="confirm-subtitle"></p>
+    </div>
+    <div class="confirm-sel-bar">
+      <span class="sel-count"><strong id="sel-n">0</strong> selected</span>
+      <div class="sel-btns">
+        <button class="sel-link" onclick="selectAll()">Select all</button>
+        <button class="sel-link" onclick="selectNone()">Clear</button>
+      </div>
+    </div>
+    <div class="confirm-scroll">
+      <table class="confirm-table">
+        <thead><tr><th style="width:40px"></th><th>Name</th><th>Email</th><th>Company</th><th>Title</th></tr></thead>
+        <tbody id="confirm-tbody"></tbody>
+      </table>
+    </div>
+    <div class="confirm-foot">
+      <button class="btn btn-outline" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmImport()">Add selected contacts</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STAGES={
+  new:{label:'New Contact',color:'#5B8DEF'},
+  contacted:{label:'Contacted',color:'#F59E0B'},
+  interested:{label:'Interested',color:'#1DD6AA'},
+  trial:{label:'Trial',color:'#9B6DFF'},
+  member:{label:'Member',color:'#F4B942'},
+  declined:{label:'Declined',color:'#4A5E78'},
+};
+const ORDER=['new','contacted','interested','trial','member','declined'];
+const MTG_TYPES=['Meeting 1','Meeting 2','Follow-up call','Demo','Check-in'];
+
+let members=[];
+let pendingImport=[];
+let selected=new Set();
+let nextId=1;
+let filterStage=null;
+let openPickerId=null;
+let tlMemberId=null;
+
+// Theme
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('theme',t);}
+function toggleTheme(){setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');}
+(()=>{const s=localStorage.getItem('theme');if(s)setTheme(s);})();
+
+// Helpers
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function today(){return new Date().toISOString().slice(0,10);}
+function daysFromNow(d){return Math.round((new Date(d)-new Date(today()))/86400000);}
+function daysAgo(d){return Math.floor((Date.now()-new Date(d))/86400000);}
+function fmtDate(s){if(!s)return'';return new Date(s+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+function mtgStatus(d){
+  const n=daysFromNow(d);
+  if(n<0)return'overdue';
+  if(n<=7)return'soon';
+  return'future';
+}
+function nextMeeting(m){
+  if(!m.meetings||!m.meetings.length)return null;
+  const future=m.meetings.filter(x=>x.date).sort((a,b)=>a.date.localeCompare(b.date));
+  return future[0]||null;
+}
+
+// CSV import
+function importCSV(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>parseCSV(e.target.result);
+  reader.readAsText(file);
+  input.value='';
+}
+function handleDragOver(e){e.preventDefault();document.getElementById('import-banner').classList.add('drag-over');}
+function handleDragLeave(){document.getElementById('import-banner').classList.remove('drag-over');}
+function handleDrop(e){
+  e.preventDefault();document.getElementById('import-banner').classList.remove('drag-over');
+  const file=e.dataTransfer.files[0];
+  if(file&&file.name.endsWith('.csv')){const r=new FileReader();r.onload=ev=>parseCSV(ev.target.result);r.readAsText(file);}
+}
+function parseCSVRows(text){
+  const rows=[];let row=[];let cur='';let inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'&&text[i+1]==='"'){cur+='"';i++;}
+      else if(c==='"'){inQ=false;}
+      else{cur+=c;}
+    } else {
+      if(c==='"'){inQ=true;}
+      else if(c===','){row.push(cur);cur='';}
+      else if(c==='\r'&&text[i+1]==='\n'){row.push(cur);rows.push(row);row=[];cur='';i++;}
+      else if(c==='\n'){row.push(cur);rows.push(row);row=[];cur='';}
+      else{cur+=c;}
+    }
+  }
+  if(cur||row.length)row.push(cur);
+  if(row.length)rows.push(row);
+  return rows;
+}
+function parseCSV(text){
+  const rows=parseCSVRows(text.trim());
+  if(rows.length<2)return;
+  const headers=rows[0].map(h=>h.trim().toLowerCase());
+  const pick=(row,...keys)=>{for(const k of keys){const i=headers.indexOf(k);if(i>=0&&row[i]&&row[i].trim())return row[i].trim();}return '';};
+  const pickName=(row,...keys)=>{for(const k of keys){const v=pick(row,k);if(v&&!/^\d+$/.test(v)&&v.length>1)return v;}return '';};
+  const parsed=[];
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i];
+    const name_en=pickName(row,'name_en');
+    const name_kr=pickName(row,'name_kr','name');
+    const name=name_en||name_kr;
+    const email=pick(row,'email');
+    if(!name&&!email)continue;
+    if(email&&members.some(m=>m.email.toLowerCase()===email.toLowerCase()))continue;
+    parsed.push({_tid:i,name_en,name_kr,name:name||email.split('@')[0],email,
+      company:pick(row,'company_en','company_kr','company'),
+      title:pick(row,'title_en','title_kr','title')});
+  }
+  if(!parsed.length){showToast('No new contacts found');return;}
+  openConfirm(parsed);
+}
+
+// Confirm
+function openConfirm(rows){
+  pendingImport=rows;selected=new Set(rows.map(r=>r._tid));
+  renderConfirmTable();
+  document.getElementById('confirm-subtitle').textContent=`${rows.length} contact${rows.length>1?'s':''} found — choose who to track.`;
+  document.getElementById('confirm-panel').classList.add('open');
+}
+function closeConfirm(){document.getElementById('confirm-panel').classList.remove('open');pendingImport=[];selected=new Set();}
+function renderConfirmTable(){
+  document.getElementById('sel-n').textContent=selected.size;
+  document.getElementById('confirm-tbody').innerHTML=pendingImport.map(r=>{
+    const chk=selected.has(r._tid)?'checked':'';
+    return `<tr class="${chk?'row-selected':''}" onclick="toggleRow(${r._tid})">
+      <td><input type="checkbox" ${chk} onclick="event.stopPropagation();toggleRow(${r._tid})"></td>
+      <td style="font-weight:600">${esc(r.name_en||r.name)}${r.name_kr&&r.name_en?`<span style="font-weight:400;color:var(--txt-mute);font-size:12px;margin-left:6px">${esc(r.name_kr)}</span>`:''}</td>
+      <td style="color:var(--txt-mute);font-size:12px">${esc(r.email)}</td>
+      <td>${esc(r.company)}</td>
+      <td style="color:var(--txt-mute);font-size:12px">${esc(r.title)}</td>
+    </tr>`;
+  }).join('');
+}
+function toggleRow(tid){if(selected.has(tid))selected.delete(tid);else selected.add(tid);renderConfirmTable();}
+function selectAll(){selected=new Set(pendingImport.map(r=>r._tid));renderConfirmTable();}
+function selectNone(){selected=new Set();renderConfirmTable();}
+function confirmImport(){
+  const toAdd=pendingImport.filter(r=>selected.has(r._tid));
+  toAdd.forEach(r=>{
+    members.unshift({id:nextId++,name:r.name,name_en:r.name_en||'',name_kr:r.name_kr||'',
+      email:r.email,company:r.company,title:r.title,stage:'new',
+      scanned:today(),followUp:false,meetings:[]});
+  });
+  closeConfirm();render();
+  if(toAdd.length)showToast(`${toAdd.length} contact${toAdd.length>1?'s':''} added`,'ok');
+}
+
+// Export
+function exportCSV(){
+  if(!members.length){showToast('Nothing to export');return;}
+  const rows=[['Name','Email','Company','Title','Stage','Scanned','Next Meeting','Follow-up']];
+  members.forEach(m=>{
+    const nm=nextMeeting(m);
+    rows.push([m.name,m.email,m.company,m.title,STAGES[m.stage].label,m.scanned,nm?`${nm.type} ${nm.date}`:'',m.followUp?'Yes':'No']);
+  });
+  const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='membership-tracker.csv';a.click();
+}
+
+// Timeline panel
+function openTL(id, e){
+  if(e)e.stopPropagation();
+  // Don't open if clicking stage pill or action buttons
+  if(e&&(e.target.classList.contains('stage-pill')||e.target.classList.contains('action-btn')||e.target.closest('.picker-wrap')||e.target.closest('.stale-badge')))return;
+  tlMemberId=id;
+  const m=members.find(x=>x.id===id);if(!m)return;
+  document.getElementById('tl-name').textContent=m.name_en||m.name;
+  document.getElementById('tl-sub').textContent=[m.title,m.company].filter(Boolean).join(' · ')||m.email;
+  renderTL();
+  document.getElementById('tl-overlay').classList.add('open');
+  document.getElementById('tl-panel').classList.add('open');
+}
+function closeTL(){
+  tlMemberId=null;
+  document.getElementById('tl-overlay').classList.remove('open');
+  document.getElementById('tl-panel').classList.remove('open');
+}
+function renderTL(){
+  const m=members.find(x=>x.id===tlMemberId);if(!m)return;
+  const meetings=m.meetings||[];
+  const sorted=[...meetings].sort((a,b)=>a.date.localeCompare(b.date));
+  const body=document.getElementById('tl-body');
+  body.innerHTML=`
+    <div class="tl-section">
+      <div class="tl-section-label">Scheduled Meetings</div>
+      ${sorted.length?sorted.map((mt,i)=>{
+        const status=mt.date?mtgStatus(mt.date):'future';
+        const df=mt.date?daysFromNow(mt.date):null;
+        const dateLabel=mt.date?`${fmtDate(mt.date)} ${df===0?'· Today':df===1?'· Tomorrow':df<0?`· ${Math.abs(df)}d overdue`:df<=7?`· in ${df}d`:''}`:'-';
+        return `<div class="mtg-card">
+          <button class="mtg-del" onclick="deleteMeeting(${i})" title="Remove">✕</button>
+          <div class="mtg-card-head">
+            <span class="mtg-card-type" style="color:${status==='overdue'?'var(--danger)':status==='soon'?'var(--warn)':'var(--accent)'}">${esc(mt.type)}</span>
+          </div>
+          <div class="mtg-card-date ${status}">${dateLabel}</div>
+          ${mt.notes?`<div class="mtg-card-notes">${esc(mt.notes)}</div>`:''}
+        </div>`;
+      }).join(''):`<div class="tl-empty">No meetings scheduled yet.</div>`}
+    </div>
+    <div class="tl-section">
+      <div class="tl-section-label">Schedule a meeting</div>
+      <div class="add-mtg-form">
+        <div class="form-row">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="mtg-type">
+            ${MTG_TYPES.map(t=>`<option>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Date</label>
+          <input class="form-input" type="date" id="mtg-date" value="${today()}">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Notes (optional)</label>
+          <textarea class="form-textarea" id="mtg-notes" placeholder="Agenda, location, etc."></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="addMeeting()">Add meeting</button>
+        </div>
+      </div>
+    </div>`;
+}
+function addMeeting(){
+  const m=members.find(x=>x.id===tlMemberId);if(!m)return;
+  const type=document.getElementById('mtg-type').value;
+  const date=document.getElementById('mtg-date').value;
+  const notes=document.getElementById('mtg-notes').value.trim();
+  if(!date){showToast('Please pick a date');return;}
+  m.meetings.push({type,date,notes});
+  renderTL();render();
+  showToast('Meeting scheduled','ok');
+}
+function deleteMeeting(idx){
+  const m=members.find(x=>x.id===tlMemberId);if(!m)return;
+  m.meetings.splice(idx,1);
+  renderTL();render();
+}
+
+// Upcoming strip
+function renderUpcoming(){
+  const today_str=today();
+  const cutoff=new Date(today_str);cutoff.setDate(cutoff.getDate()+14);
+  const cutoff_str=cutoff.toISOString().slice(0,10);
+  const items=[];
+  members.forEach(m=>{
+    (m.meetings||[]).forEach(mt=>{
+      if(mt.date&&mt.date<=cutoff_str){
+        items.push({m,mt});
+      }
+    });
+  });
+  items.sort((a,b)=>a.mt.date.localeCompare(b.mt.date));
+  const wrap=document.getElementById('upcoming-wrap');
+  const list=document.getElementById('upcoming-list');
+  if(!items.length){wrap.classList.remove('has-items');return;}
+  wrap.classList.add('has-items');
+  const st=STAGES[items[0]?.m?.stage]||STAGES.new;
+  list.innerHTML=items.map(({m,mt})=>{
+    const status=mtgStatus(mt.date);
+    const df=daysFromNow(mt.date);
+    const when=df<0?`${Math.abs(df)}d overdue`:df===0?'Today':df===1?'Tomorrow':`in ${df}d`;
+    const stg=STAGES[m.stage];
+    return `<div class="upcoming-chip ${status}" onclick="openTL(${m.id})">
+      <span class="chip-dot" style="background:${stg.color}"></span>
+      <div>
+        <div class="chip-name">${esc(m.name_en||m.name)}</div>
+        <div class="chip-meta">${esc(mt.type)} · ${when}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Main render
+function renderPipeline(){
+  const counts={};ORDER.forEach(s=>counts[s]=0);
+  members.forEach(m=>counts[m.stage]=(counts[m.stage]||0)+1);
+  const total=members.length;
+  document.getElementById('total-count').textContent=total;
+  document.getElementById('pipeline').innerHTML=ORDER.map(s=>{
+    const st=STAGES[s];const n=counts[s];
+    const pct=total>0?Math.round(n/total*100):0;
+    return `<div class="stage-step ${filterStage===s?'active-filter':''}" style="--step-color:${st.color}" onclick="toggleFilter('${s}')">
+      <div class="step-label"><span class="step-dot"></span>${st.label}</div>
+      <div class="step-count">${n}</div>
+      <div class="step-sub">${pct}%</div>
+    </div>`;
+  }).join('');
+}
+function toggleFilter(s){filterStage=filterStage===s?null:s;render();}
+
+function render(){
+  renderPipeline();renderUpcoming();
+  const q=document.getElementById('search').value.toLowerCase();
+  const fuOnly=document.getElementById('stale-only').checked;
+  const rows=members.filter(m=>{
+    if(filterStage&&m.stage!==filterStage)return false;
+    if(q&&!m.name.toLowerCase().includes(q)&&!(m.name_en||'').toLowerCase().includes(q)&&!(m.name_kr||'').toLowerCase().includes(q)&&!m.email.toLowerCase().includes(q)&&!(m.company||'').toLowerCase().includes(q))return false;
+    if(fuOnly&&!m.followUp)return false;
+    return true;
+  });
+  const tbody=document.getElementById('tbody');
+  if(!rows.length){
+    tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📭</div><strong>${members.length?'No contacts match your filter':'No contacts yet'}</strong><p>${members.length?'Try adjusting your search.':'Import a CardCRM CSV above to get started.'}</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML=rows.map(m=>{
+    const st=STAGES[m.stage];
+    const nm=nextMeeting(m);
+    const fuBadge=m.followUp?`<span class="stale-badge" onclick="event.stopPropagation();toggleFollowUp(${m.id})">⚑ Follow up</span>`:`<span style="color:var(--txt-mute);font-size:11px;">—</span>`;
+    let mtgBadge;
+    if(nm){
+      const status=mtgStatus(nm.date);
+      const df=daysFromNow(nm.date);
+      const label=df<0?`${Math.abs(df)}d overdue`:df===0?'Today':df===1?'Tomorrow':`${fmtDate(nm.date)}`;
+      mtgBadge=`<span class="mtg-badge ${status}">● ${esc(nm.type)} · ${label}</span>`;
+    } else {
+      mtgBadge=`<span class="mtg-badge none" onclick="event.stopPropagation();openTL(${m.id})">+ Schedule</span>`;
+    }
+    return `<tr class="${m.followUp?'stale-row':''}" onclick="openTL(${m.id},event)">
+      <td><span class="stage-stripe" style="background:${st.color}"></span></td>
+      <td><div class="member-name">${esc(m.name_en||m.name)}${m.name_kr?`<span style="font-weight:400;color:var(--txt-mute);font-size:11px;margin-left:6px">${esc(m.name_kr)}</span>`:''}</div><div class="member-sub">${esc(m.email)}</div></td>
+      <td onclick="event.stopPropagation()">
+        <div class="picker-wrap" id="wrap-${m.id}">
+          <span class="stage-pill" style="color:${st.color};border-color:${st.color}22;background:${st.color}18" onclick="togglePicker(${m.id},event)">${st.label}</span>
+          <div class="stage-select" id="picker-${m.id}">
+            ${ORDER.map(s=>`<div class="stage-option" onclick="changeStage(${m.id},'${s}')"><span class="opt-dot" style="background:${STAGES[s].color}"></span>${STAGES[s].label}</div>`).join('')}
+          </div>
+        </div>
+      </td>
+      <td><div>${esc(m.company||'—')}</div><div class="member-sub">${esc(m.title||'')}</div></td>
+      <td>${mtgBadge}</td>
+      <td onclick="event.stopPropagation();toggleFollowUp(${m.id})">${fuBadge}</td>
+      <td onclick="event.stopPropagation()"><button class="action-btn" onclick="removeMember(${m.id})">Remove</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function togglePicker(id,e){
+  e.stopPropagation();
+  const el=document.getElementById('picker-'+id);
+  if(openPickerId&&openPickerId!==id)document.getElementById('picker-'+openPickerId)?.classList.remove('open');
+  el.classList.toggle('open');
+  openPickerId=el.classList.contains('open')?id:null;
+}
+function changeStage(id,stage){const m=members.find(x=>x.id===id);if(m)m.stage=stage;openPickerId=null;render();}
+function toggleFollowUp(id){const m=members.find(x=>x.id===id);if(m){m.followUp=!m.followUp;render();}}
+function removeMember(id){members=members.filter(m=>m.id!==id);if(tlMemberId===id)closeTL();render();}
+document.addEventListener('click',()=>{if(openPickerId){document.getElementById('picker-'+openPickerId)?.classList.remove('open');openPickerId=null;}});
+
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast'+(type?' '+type:'');
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+render();
+</script>
