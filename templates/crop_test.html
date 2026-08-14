@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Crop Test</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+body { background: #0f172a; color: white; min-height: 100vh; padding: 24px; }
+h1 { font-size: 20px; font-weight: 800; margin-bottom: 16px; }
+.top-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.upload-area { flex: 1; border: 2px dashed #475569; border-radius: 12px; padding: 28px; text-align: center; cursor: pointer; transition: all 0.2s; min-width: 200px; }
+.upload-area:hover { border-color: #6366f1; background: rgba(99,102,241,0.05); }
+input[type=file] { display: none; }
+.mode-toggle { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 18px; white-space: nowrap; }
+.mode-toggle label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.mode-toggle input { accent-color: #6366f1; width: 16px; height: 16px; cursor: pointer; }
+.mode-hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.card { background: #1e293b; border-radius: 10px; overflow: hidden; }
+.card-header { padding: 10px 14px; font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card img { width: 100%; display: block; }
+.card .cols { display: grid; gap: 2px; }
+.col-label { font-size: 10px; color: #64748b; padding: 4px 8px; }
+.badge { padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+.badge-ok { background: #dcfce7; color: #166534; }
+.badge-processing { background: #e0e7ff; color: #4338ca; }
+.badge-error { background: #fee2e2; color: #991b1b; }
+
+/* Action bar */
+.action-bar { display: none; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px 22px; margin-bottom: 24px; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.action-bar.visible { display: flex; }
+.action-bar-left { font-size: 13px; color: #94a3b8; }
+.action-bar-left strong { color: white; }
+.action-bar-right { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { border: none; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.btn-dl { background: #1e3a5f; color: #7dd3fc; }
+.btn-dl:hover { background: #1e4976; }
+.btn-ocr { background: #6366f1; color: white; }
+.btn-ocr:hover { background: #4f46e5; }
+.btn-ocr:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+
+/* OCR progress */
+.ocr-status { font-size: 12px; color: #64748b; margin-top: 6px; }
+</style>
+</head>
+<body>
+<h1>✂️ Crop Test</h1>
+
+<div class="top-bar">
+  <div class="upload-area" onclick="document.getElementById('fi').click()">
+    <div style="font-size:28px;margin-bottom:6px;">📷</div>
+    <div style="font-weight:700;margin-bottom:3px;">Upload card photos</div>
+    <div style="font-size:12px;color:#94a3b8;">Select multiple files</div>
+  </div>
+  <div class="mode-toggle">
+    <label>
+      <input type="checkbox" id="pair-mode">
+      Pair mode
+    </label>
+    <div class="mode-hint">Every 2 photos cropped &amp; stitched into one image.<br>Order: 1+2 → pair 1, 3+4 → pair 2, …</div>
+  </div>
+</div>
+<input type="file" id="fi" accept="image/*" multiple onchange="run(this.files)">
+
+<!-- Action bar — appears when all done -->
+<div class="action-bar" id="action-bar">
+  <div class="action-bar-left">
+    <strong id="done-count">0</strong> images ready
+    <div class="ocr-status" id="ocr-status"></div>
+  </div>
+  <div class="action-bar-right">
+    <button class="btn btn-dl" onclick="downloadAll()">⬇ Download All</button>
+    <button class="btn btn-ocr" id="ocr-btn" onclick="scanAndExportCSV()">🔍 Scan & Export CSV</button>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+// Stores { dataUrl, name } for every completed stitched image
+const results = [];
+let totalExpected = 0;
+let totalDone = 0;
+let isRunning = false;
+
+function loadImg(src) {
+  return new Promise((res, rej) => {
+    const i = new Image(); i.crossOrigin = 'anonymous';
+    i.onload = () => res(i); i.onerror = rej; i.src = src;
+  });
+}
+
+function trimBorder(img) {
+  const cv = document.createElement('canvas');
+  cv.width = img.width; cv.height = img.height;
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
+  const W = cv.width, H = cv.height;
+
+  const bgSamples = [];
+  for (let x = 0; x < W; x++) {
+    for (const y of [0,1,2,3,4,H-5,H-4,H-3,H-2,H-1]) {
+      if (y < 0 || y >= H) continue;
+      const i=(y*W+x)*4; bgSamples.push([d[i],d[i+1],d[i+2]]);
+    }
+  }
+  for (let y = 0; y < H; y++) {
+    for (const x of [0,1,2,3,4,W-5,W-4,W-3,W-2,W-1]) {
+      if (x < 0 || x >= W) continue;
+      const i=(y*W+x)*4; bgSamples.push([d[i],d[i+1],d[i+2]]);
+    }
+  }
+  const bg = [0,1,2].map(c => bgSamples.reduce((s,p)=>s+p[c],0)/bgSamples.length);
+
+  const rowDiff = new Float32Array(H);
+  const colDiff = new Float32Array(W);
+  for (let y = 0; y < H; y++) {
+    let sum = 0;
+    for (let x = 0; x < W; x++) {
+      const i=(y*W+x)*4;
+      sum += Math.max(Math.abs(d[i]-bg[0]),Math.abs(d[i+1]-bg[1]),Math.abs(d[i+2]-bg[2]));
+    }
+    rowDiff[y] = sum / W;
+  }
+  for (let x = 0; x < W; x++) {
+    let sum = 0;
+    for (let y = 0; y < H; y++) {
+      const i=(y*W+x)*4;
+      sum += Math.max(Math.abs(d[i]-bg[0]),Math.abs(d[i+1]-bg[1]),Math.abs(d[i+2]-bg[2]));
+    }
+    colDiff[x] = sum / H;
+  }
+
+  const thresh = 15;
+  let y0=H-1, y1=0, x0=W-1, x1=0;
+  for (let y=0; y<H; y++) if (rowDiff[y] > thresh) { y0=Math.min(y0,y); y1=Math.max(y1,y); }
+  for (let x=0; x<W; x++) if (colDiff[x] > thresh) { x0=Math.min(x0,x); x1=Math.max(x1,x); }
+
+  if (x1<=x0 || y1<=y0) return cv;
+  const sx=x0, sy=y0;
+  const sw=Math.min(W,x1+1)-sx, sh=Math.min(H,y1+1)-sy;
+  const out=document.createElement('canvas');
+  out.width=sw; out.height=sh;
+  out.getContext('2d').drawImage(cv,sx,sy,sw,sh,0,0,sw,sh);
+  return out;
+}
+
+async function stitchVertical(url1, url2) {
+  const [a, b] = await Promise.all([loadImg(url1), loadImg(url2)]);
+  const ta = trimBorder(a), tb = trimBorder(b);
+  const w = Math.max(ta.width, tb.width);
+  const h = ta.height + tb.height;
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(ta, Math.round((w - ta.width) / 2), 0);
+  ctx.drawImage(tb, Math.round((w - tb.width) / 2), ta.height);
+  return cv.toDataURL('image/jpeg', 0.95);
+}
+
+async function run(files) {
+  if (isRunning) {
+    alert('Processing in progress — please wait until done before uploading new files.');
+    return;
+  }
+  const grid = document.getElementById('grid');
+  const pairMode = document.getElementById('pair-mode').checked;
+  const arr = Array.from(files);
+
+  if (pairMode && arr.length % 2 !== 0) {
+    alert(`Pair mode requires an even number of photos.\nYou selected ${arr.length} — please add or remove one.`);
+    return;
+  }
+
+  isRunning = true;
+
+  // Reset
+  results.length = 0;
+  grid.innerHTML = '';
+  document.getElementById('action-bar').classList.remove('visible');
+  document.getElementById('ocr-status').textContent = '';
+  document.getElementById('ocr-btn').disabled = false;
+  document.getElementById('ocr-btn').textContent = '🔍 Scan & Export CSV';
+
+  // Show placeholders immediately
+  arr.forEach((f, i) => {
+    const id = 'f' + i;
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="card" id="card${id}">
+        <div class="card-header">
+          <span class="card-name">${f.name}</span>
+          <span class="badge badge-processing" id="b${id}">Queued</span>
+        </div>
+        <div class="cols" style="grid-template-columns:1fr 1fr">
+          <div><div class="col-label">Original</div><img src="${URL.createObjectURL(f)}" style="width:100%"></div>
+          <div><div class="col-label">Cropped</div><img id="r${id}" src="" style="width:100%;opacity:.3;min-height:60px;background:#0f172a"></div>
+        </div>
+      </div>`);
+  });
+
+  // Update first badge to show processing started
+  document.getElementById('bf0').textContent = `Processing 1/${arr.length}…`;
+  document.getElementById('bf0').className = 'badge badge-processing';
+
+  // Stream results from backend — updates UI as each file finishes
+  const fd = new FormData();
+  arr.forEach(f => fd.append('files', f));
+
+  const batchResults = new Array(arr.length).fill(null);
+  try {
+    const res = await fetch('/api/crop-batch', { method: 'POST', body: fd });
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep incomplete line
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const msg = JSON.parse(line.slice(6));
+        if (msg.done) break;
+        const i = msg.i;
+        batchResults[i] = msg;
+        const bid = document.getElementById('bf' + i);
+        if (msg.success) {
+          document.getElementById('rf' + i).src = msg.url + '?t=' + Date.now();
+          document.getElementById('rf' + i).style.opacity = 1;
+          bid.textContent = 'Done'; bid.className = 'badge badge-ok';
+        } else {
+          bid.textContent = msg.error?.slice(0, 30) || 'Error';
+          bid.className = 'badge badge-error';
+        }
+        // Mark next as processing
+        const next = document.getElementById('bf' + (i + 1));
+        if (next && next.textContent === 'Queued') {
+          next.textContent = `Processing ${i+2}/${arr.length}…`;
+        }
+      }
+    }
+  } catch(e) {
+    console.error(e);
+    // Show error on any still-queued badges
+    document.querySelectorAll('.badge-processing').forEach(b => {
+      if (b.textContent === 'Queued' || b.textContent.startsWith('Processing')) {
+        b.textContent = 'Network error';
+        b.className = 'badge badge-error';
+      }
+    });
+    isRunning = false;
+    return;
+  }
+
+  if (!pairMode) {
+    // Single mode: each cropped image = one result
+    for (let i = 0; i < batchResults.length; i++) {
+      if (batchResults[i].success) {
+        const img = document.getElementById('rf' + i);
+        // Wait for image to load then capture data URL
+        await new Promise(res => { img.complete ? res() : img.addEventListener('load', res); });
+        const cv = document.createElement('canvas');
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        cv.getContext('2d').drawImage(img, 0, 0);
+        results.push({ dataUrl: cv.toDataURL('image/jpeg', 0.95), name: `card_${i+1}.jpg` });
+      }
+    }
+  } else {
+    // Pair mode: stitch every two consecutive cropped images
+    for (let i = 0; i < batchResults.length; i += 2) {
+      const r1 = batchResults[i], r2 = batchResults[i + 1];
+      if (!r1?.success) continue;
+
+      // Rebuild the pair card UI
+      const id = 'p' + (i / 2);
+      const f1 = arr[i], f2 = arr[i + 1];
+      const label = f2 ? `${f1.name} + ${f2.name}` : f1.name;
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="card-header">
+          <span class="card-name">${label}</span>
+          <span class="badge badge-processing" id="bs${id}">Stitching…</span>
+        </div>
+        <div class="cols" style="grid-template-columns:${f2?'1fr 1fr 1fr':'1fr 1fr'}">
+          <div><div class="col-label">Original 1</div><img src="${URL.createObjectURL(f1)}" style="width:100%"></div>
+          ${f2 ? `<div><div class="col-label">Original 2</div><img src="${URL.createObjectURL(f2)}" style="width:100%"></div>` : ''}
+          <div><div class="col-label">Stitched</div><img id="rs${id}" src="" style="width:100%;opacity:.3"></div>
+        </div>`;
+      // Remove the two individual placeholder cards
+      document.getElementById('cardf' + i)?.remove();
+      document.getElementById('cardf' + (i+1))?.remove();
+      grid.appendChild(card);
+
+      try {
+        let stitched;
+        if (r2?.success) {
+          stitched = await stitchVertical(r1.url, r2.url);
+        } else {
+          const img = await loadImg(r1.url);
+          const ta = trimBorder(img);
+          stitched = ta.toDataURL('image/jpeg', 0.95);
+        }
+        document.getElementById(`rs${id}`).src = stitched;
+        document.getElementById(`rs${id}`).style.opacity = 1;
+        document.getElementById(`bs${id}`).textContent = 'Done';
+        document.getElementById(`bs${id}`).className = 'badge badge-ok';
+        results.push({ dataUrl: stitched, name: `pair_${i/2 + 1}.jpg` });
+      } catch(e) {
+        document.getElementById(`bs${id}`).textContent = 'Stitch error';
+        document.getElementById(`bs${id}`).className = 'badge badge-error';
+      }
+    }
+  }
+
+  isRunning = false;
+  if (results.length > 0) {
+    document.getElementById('action-bar').classList.add('visible');
+    document.getElementById('done-count').textContent = results.length;
+  }
+}
+
+function downloadAll() {
+  results.forEach((r, i) => {
+    setTimeout(() => {
+      const a = document.createElement('a');
+      a.href = r.dataUrl; a.download = r.name; a.click();
+    }, i * 300);
+  });
+}
+
+async function scanAndExportCSV() {
+  const btn = document.getElementById('ocr-btn');
+  const status = document.getElementById('ocr-status');
+  btn.disabled = true;
+
+  const HEADERS = ['name_kr','name_en','title_kr','title_en','company_kr','company_en','email','phone_mobile','phone_office','phone_fax','address','website','instagram','notes'];
+  const rows = [HEADERS];
+
+  for (let i = 0; i < results.length; i++) {
+    btn.textContent = `🔍 Scanning ${i+1}/${results.length}…`;
+    status.textContent = `Processing ${results[i].name}`;
+    if (i > 0) await delay(4200);
+
+    try {
+      // Convert data URL to blob
+      const blob = await (await fetch(results[i].dataUrl)).blob();
+      const fd = new FormData();
+      fd.append('file', blob, results[i].name);
+      const res = await fetch('/api/ocr-image', { method: 'POST', body: fd });
+      const json = await res.json();
+      if (json.data) {
+        const d = json.data;
+        rows.push(HEADERS.map(h => (d[h] || '').toString().replace(/"/g,'""')));
+      }
+    } catch(e) {
+      rows.push(HEADERS.map(() => ''));
+    }
+  }
+
+  // Build and download CSV
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'contacts.csv';
+  a.click();
+
+  btn.textContent = '✅ CSV Downloaded';
+  status.textContent = `${rows.length - 1} contacts extracted`;
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

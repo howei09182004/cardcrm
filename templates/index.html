@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CardCRM</title>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+body { background: #0f172a; display: flex; height: 100vh; overflow: hidden; color: #1e293b; font-size: 13px; }
+
+.sidebar { width: 200px; background: #1e293b; display: flex; flex-direction: column; padding: 16px 0; flex-shrink: 0; }
+.logo { padding: 0 16px 16px; border-bottom: 1px solid #334155; }
+.logo h1 { font-size: 16px; font-weight: 800; color: white; }
+.logo p { font-size: 10px; color: #64748b; }
+.nav { padding: 12px 8px; flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; color: #94a3b8; margin-bottom: 2px; }
+.nav-item:hover { background: #334155; color: white; }
+.nav-item.active { background: #6366f1; color: white; }
+.nav-badge { margin-left: auto; background: rgba(255,255,255,0.2); color: white; font-size: 9px; padding: 1px 6px; border-radius: 10px; font-weight: 700; }
+
+.main { flex: 1; background: #f8fafc; display: flex; flex-direction: column; overflow: hidden; }
+.topbar { background: white; border-bottom: 1px solid #e2e8f0; padding: 12px 20px; display: flex; align-items: center; gap: 10px; }
+.topbar h2 { font-size: 16px; font-weight: 700; flex: 1; }
+.btn { padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.15s; }
+.btn-primary { background: #6366f1; color: white; }
+.btn-primary:hover { background: #4f46e5; }
+.btn-outline { background: white; color: #475569; border: 1px solid #e2e8f0; }
+.btn-outline:hover { background: #f8fafc; }
+.btn-green { background: #10b981; color: white; }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+
+.page { display: none; flex: 1; overflow-y: auto; padding: 20px; }
+.page.active { display: block; }
+
+/* SCAN */
+.scan-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.card-box { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.card-box-header { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+.card-box-header h3 { font-size: 13px; font-weight: 700; }
+.step-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.step-done { background: #dcfce7; color: #166534; }
+.step-wait { background: #f1f5f9; color: #64748b; }
+.step-pending { background: #e0e7ff; color: #4338ca; }
+
+.drop-zone { border: 2px dashed #cbd5e0; border-radius: 10px; margin: 16px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; }
+.drop-zone:hover, .drop-zone.drag { border-color: #6366f1; background: #f5f3ff; }
+.drop-zone .dz-icon { font-size: 40px; margin-bottom: 10px; }
+.drop-zone h3 { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+.drop-zone p { font-size: 11px; color: #94a3b8; }
+#fileInput { display: none; }
+
+.preview-img { width: 100%; max-height: 200px; object-fit: contain; display: block; }
+.processing { padding: 40px 20px; text-align: center; }
+.spinner { width: 36px; height: 36px; border: 3px solid #e2e8f0; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.fields-area { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.field-group { display: flex; flex-direction: column; gap: 3px; }
+.field-label { font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.field-input { border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; font-size: 12px; color: #0f172a; outline: none; width: 100%; }
+.field-input:focus { border-color: #6366f1; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.action-row { padding: 12px 16px; border-top: 1px solid #f1f5f9; display: flex; gap: 8px; }
+
+/* CONTACTS */
+.table-card { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; }
+.table-header { padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; }
+table { width: 100%; border-collapse: collapse; }
+th { background: #f8fafc; padding: 9px 14px; text-align: left; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #f1f5f9; }
+td { padding: 11px 14px; font-size: 12px; color: #334155; border-bottom: 1px solid #f8fafc; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #f8fafc; cursor: pointer; }
+.contact-cell { display: flex; align-items: center; gap: 8px; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; flex-shrink: 0; }
+.cn { font-weight: 600; color: #0f172a; font-size: 12px; }
+.ck { font-size: 10px; color: #6366f1; }
+.cc { font-size: 10px; color: #94a3b8; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+.bg-green { background: #dcfce7; color: #166534; }
+.bg-blue { background: #dbeafe; color: #1d4ed8; }
+.bg-purple { background: #ede9fe; color: #6d28d9; }
+.empty-state { text-align: center; padding: 60px 20px; color: #94a3b8; }
+.empty-state .es-icon { font-size: 48px; margin-bottom: 12px; }
+
+/* DETAIL PANEL */
+.detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: flex-end; }
+.detail-overlay.open { display: flex; }
+.detail-panel { width: 360px; height: 100%; background: white; overflow-y: auto; padding: 24px; box-shadow: -4px 0 20px rgba(0,0,0,0.15); }
+.detail-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+.d-avatar { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: white; flex-shrink: 0; }
+.d-name { font-size: 18px; font-weight: 800; color: #0f172a; }
+.d-name-kr { font-size: 14px; color: #6366f1; font-weight: 600; }
+.d-title { font-size: 12px; color: #64748b; margin-top: 2px; }
+.close-btn { background: #f1f5f9; border: none; border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 14px; }
+.section { margin-bottom: 20px; }
+.section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; }
+.info-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.info-icon { width: 28px; height: 28px; border-radius: 7px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+.info-label { font-size: 10px; color: #94a3b8; }
+.info-val { font-size: 13px; color: #0f172a; font-weight: 500; }
+
+/* PAIR PAGE */
+.pair-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.pair-thumb { position: relative; width: 140px; border-radius: 10px; overflow: hidden; cursor: pointer; border: 3px solid transparent; transition: all 0.15s; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.pair-thumb:hover { border-color: #6366f1; }
+.pair-thumb.selected { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.3); }
+.pair-thumb.paired-a { border-color: #10b981; }
+.pair-thumb.paired-b { border-color: #10b981; }
+.pair-thumb img { width: 100%; height: 90px; object-fit: cover; display: block; }
+.pair-thumb-label { padding: 5px 7px; font-size: 10px; color: #475569; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair-badge { position: absolute; top: 5px; right: 5px; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 8px; }
+.pair-group { display: flex; align-items: center; gap: 6px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 10px; padding: 8px; }
+.pair-group .pair-thumb { border: none; box-shadow: none; width: 110px; }
+.pair-group .pair-thumb img { height: 70px; }
+.pair-link-icon { font-size: 18px; flex-shrink: 0; }
+.pair-unlink { position: absolute; top: -6px; right: -6px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 24px; right: 24px; background: #0f172a; color: white; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 999; display: none; }
+.toast.show { display: block; animation: fadeIn 0.2s; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="logo"><h1>📇 CardCRM</h1><p>Smart Card Manager</p></div>
+  <div class="nav">
+    <div class="nav-item active" id="nav-scan" onclick="nav('scan')">📷 Scan Card</div>
+    <div class="nav-item" id="nav-pair" onclick="nav('pair')">🔗 Pair & Scan</div>
+    <div class="nav-item" id="nav-contacts" onclick="nav('contacts')">👥 Contacts <span class="nav-badge" id="contact-count">0</span></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <h2 id="page-title">Scan Card</h2>
+    <button class="btn btn-outline btn-sm" onclick="nav('scan')">＋ Scan Card</button>
+  </div>
+
+  <!-- SCAN PAGE -->
+  <div id="page-scan" class="page active">
+
+    <!-- Upload zone -->
+    <div class="card-box" style="margin-bottom:16px;">
+      <div class="card-box-header">
+        <h3>📷 Upload Cards</h3>
+        <span id="upload-badge" class="step-badge step-wait">No files selected</span>
+      </div>
+      <div id="drop-zone" class="drop-zone" onclick="document.getElementById('fileInput').click()"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handleDrop(event)">
+        <div class="dz-icon">🖼️</div>
+        <h3>Drop multiple card images here or click to upload</h3>
+        <p>Supports JPG, PNG, PDF, WebP · Select multiple files at once</p>
+        <br>
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();document.getElementById('fileInput').click()">Choose Files</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*,.pdf" multiple onchange="handleFiles(this.files)">
+    </div>
+
+    <!-- Batch progress -->
+    <div id="batch-area" style="display:none;">
+      <div class="card-box" style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#0f172a;" id="batch-title">Processing...</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px;" id="batch-sub"></div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="resetScan()">Start Over</button>
+            <button class="btn btn-green btn-sm" id="csv-btn" onclick="downloadCSV()" style="display:none;">⬇️ Download CSV</button>
+          </div>
+        </div>
+        <!-- Progress bar -->
+        <div style="margin-top:12px;background:#e2e8f0;border-radius:99px;height:6px;">
+          <div id="progress-bar" style="background:#6366f1;border-radius:99px;height:6px;width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
+
+      <!-- Thumbnail strip -->
+      <div id="thumb-strip" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;"></div>
+
+      <!-- Results table -->
+      <div id="results-area" style="display:none;">
+        <div class="table-card">
+          <div class="table-header">
+            <h3 style="font-size:14px;font-weight:700;">Scanned Results</h3>
+            <button class="btn btn-green btn-sm" onclick="downloadCSV()">⬇️ Download CSV</button>
+          </div>
+          <div id="results-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAIR PAGE -->
+  <div id="page-pair" class="page">
+    <div class="card-box" style="margin-bottom:16px;">
+      <div class="card-box-header">
+        <h3>🔗 Pair & Scan</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span id="pair-status" style="font-size:11px;color:#64748b;"></span>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('pairFileInput').click()">Upload Photos</button>
+          <button class="btn btn-primary btn-sm" id="pair-scan-btn" onclick="startPairScan()" style="display:none;">▶ Scan All</button>
+          <button class="btn btn-green btn-sm" id="pair-csv-btn" onclick="downloadPairCSV()" style="display:none;">⬇️ Download CSV</button>
+        </div>
+      </div>
+      <input type="file" id="pairFileInput" accept="image/*" multiple onchange="loadPairFiles(this.files)" style="display:none;">
+      <div id="pair-instructions" style="padding:16px;font-size:12px;color:#64748b;line-height:1.6;">
+        1. Upload all card photos<br>
+        2. Click a photo to select it (blue border), then click another to pair them as front+back<br>
+        3. Paired cards will be combined into one image before OCR<br>
+        4. Click ✕ on a pair to unlink<br>
+        5. Click <b>Scan All</b> when ready
+      </div>
+      <div id="pair-grid-area" style="padding:16px;display:none;">
+        <div id="pair-groups" style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;"></div>
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Singles (unpaired)</div>
+        <div id="pair-singles" class="pair-grid"></div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="pair-progress-area" style="display:none;">
+      <div class="card-box" style="margin-bottom:16px;padding:14px 16px;">
+        <div style="font-size:13px;font-weight:700;" id="pair-progress-title">Processing...</div>
+        <div style="margin-top:10px;background:#e2e8f0;border-radius:99px;height:6px;">
+          <div id="pair-progress-bar" style="background:#6366f1;border-radius:99px;height:6px;width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
+      <div id="pair-results-area" style="display:none;">
+        <div class="table-card">
+          <div class="table-header"><h3 style="font-size:14px;font-weight:700;">Results</h3></div>
+          <div id="pair-results-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTACTS PAGE -->
+  <div id="page-contacts" class="page">
+    <div class="table-card">
+      <div class="table-header">
+        <h3 style="font-size:14px;font-weight:700;">All Contacts</h3>
+        <button class="btn btn-primary btn-sm" onclick="nav('scan')">＋ Scan Card</button>
+      </div>
+      <div id="contacts-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Panel -->
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-panel" id="detailPanel"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const FIELDS = ['name_kr','name_en','title_kr','title_en','company_kr','company_en','email','phone_mobile','phone_office','phone_fax','address','website','instagram','notes'];
+const COLORS = ['#6366f1','#0ea5e9','#ec4899','#f59e0b','#10b981','#8b5cf6','#ef4444','#14b8a6'];
+let allContacts = [];
+
+// Batch state
+let queue = [];       // {file, objectUrl, contact, status: 'pending'|'processing'|'done'|'saved'|'skipped'}
+let currentIdx = 0;
+
+function nav(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.getElementById('nav-' + page).classList.add('active');
+  const titles = { scan: 'Scan Cards', pair: 'Pair & Scan', contacts: 'Contacts' };
+  document.getElementById('page-title').textContent = titles[page] || page;
+  if (page === 'contacts') loadContacts();
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+}
+
+function handleFiles(files) {
+  if (!files.length) return;
+  queue = Array.from(files).map(f => ({ file: f, objectUrl: URL.createObjectURL(f), contact: null, status: 'pending' }));
+  currentIdx = 0;
+  document.getElementById('drop-zone').style.display = 'none';
+  document.getElementById('batch-area').style.display = 'block';
+  document.getElementById('results-area').style.display = 'none';
+  document.getElementById('csv-btn').style.display = 'none';
+  renderThumbs();
+  processAll();
+}
+
+function renderThumbs() {
+  const strip = document.getElementById('thumb-strip');
+  strip.innerHTML = queue.map((item) => {
+    const overlay = item.status === 'done' ? '✓' : item.status === 'processing' ? '⏳' : item.status === 'error' ? '❌' : '';
+    const bg = item.status === 'done' ? 'rgba(16,185,129,0.6)' : item.status === 'error' ? 'rgba(239,68,68,0.6)' : 'rgba(0,0,0,0.4)';
+    return `<div style="position:relative;border-radius:8px;overflow:hidden;width:72px;height:72px;flex-shrink:0;">
+      <img src="${item.objectUrl}" style="width:100%;height:100%;object-fit:cover;">
+      ${overlay ? `<div style="position:absolute;inset:0;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;">${overlay}</div>` : ''}
+    </div>`;
+  }).join('');
+  const done = queue.filter(q => q.status === 'done' || q.status === 'error').length;
+  const pct = queue.length ? Math.round(done / queue.length * 100) : 0;
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('upload-badge').textContent = `${done}/${queue.length} processed`;
+  document.getElementById('upload-badge').className = 'step-badge ' + (done === queue.length ? 'step-done' : 'step-pending');
+  document.getElementById('batch-title').textContent = done === queue.length ? `Done — ${done} cards scanned` : `Processing ${done + 1} of ${queue.length}...`;
+  document.getElementById('batch-sub').textContent = done === queue.length ? '' : (queue[currentIdx] ? queue[currentIdx].file.name : '');
+}
+
+let mergedContacts = [];
+
+async function processAll() {
+  for (let i = 0; i < queue.length; i++) {
+    currentIdx = i;
+    queue[i].status = 'processing';
+    renderThumbs();
+    let data = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const fd = new FormData();
+        fd.append('file', queue[i].file);
+        const r = await fetch('/api/scan', { method: 'POST', body: fd });
+        data = await r.json();
+        if (!data.error) break;
+        await new Promise(res => setTimeout(res, 1500));
+      } catch(e) {
+        await new Promise(res => setTimeout(res, 1500));
+      }
+    }
+    queue[i].status = (data && !data.error) ? 'done' : 'error';
+    queue[i].contact = (data && !data.error) ? data.contact : {};
+    renderThumbs();
+  }
+  // Auto-merge front/back pairs
+  const scanned = queue.filter(q => q.status === 'done' && q.contact).map(q => q.contact);
+  showToast('🔄 Matching front & back sides...');
+  try {
+    const r = await fetch('/api/merge', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(scanned) });
+    mergedContacts = await r.json();
+  } catch(e) {
+    mergedContacts = scanned;
+  }
+  showResults();
+}
+
+function showResults() {
+  document.getElementById('csv-btn').style.display = 'inline-flex';
+  document.getElementById('results-area').style.display = 'block';
+  const total = mergedContacts.length;
+  const merged = mergedContacts.filter(c => c._merged).length;
+  document.getElementById('batch-sub').textContent = `${total} contacts ready${merged ? ` (${merged} front+back merged)` : ''}`;
+  const cols = ['name_en','name_kr','title_en','title_kr','company_en','company_kr','email','phone_mobile','phone_office','phone_fax','address','website','instagram','notes'];
+  const headers = ['Card','Name (EN)','Name (KR)','Title (EN)','Title (KR)','Company (EN)','Company (KR)','Email','Mobile','Office','Fax','Address','Website','Instagram','Notes'];
+  document.getElementById('results-body').innerHTML = `<div style="overflow-x:auto;"><table>
+    <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+    ${mergedContacts.map(c => `<tr${c._merged ? ' style="background:#f0fdf4"' : ''}>
+      <td style="white-space:nowrap">
+        ${c.card_image ? `<a href="${c.card_image}" target="_blank"><img src="${c.card_image}" style="height:40px;border-radius:4px;object-fit:cover;"></a>` : ''}
+        ${c.card_image_back ? `<a href="${c.card_image_back}" target="_blank"><img src="${c.card_image_back}" style="height:40px;border-radius:4px;object-fit:cover;margin-left:2px;"></a>` : ''}
+        ${c._merged ? '<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 4px;border-radius:4px;margin-left:2px;">merged</span>' : ''}
+      </td>
+      ${cols.map(col => `<td>${c[col] || '—'}</td>`).join('')}
+    </tr>`).join('')}
+  </table></div>`;
+  showToast(`✅ Done! ${total} contacts ready${merged ? ` · ${merged} merged` : ''}. Click Download CSV.`);
+}
+
+function downloadCSV() {
+  if (!mergedContacts.length) { showToast('No contacts to export.'); return; }
+  const cols = ['name_en','name_kr','title_en','title_kr','company_en','company_kr','email','phone_mobile','phone_office','phone_fax','address','website','instagram','notes','card_path','card_path_back'];
+  const headers = ['Name (EN)','Name (KR)','Title (EN)','Title (KR)','Company (EN)','Company (KR)','Email','Mobile','Office','Fax','Address','Website','Instagram','Notes','Card Image (Front)','Card Image (Back)'];
+  const rows = [headers, ...mergedContacts.map(c => cols.map(col => `"${(c[col] || '').replace(/"/g, '""')}"`)  )];
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'contacts_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+function resetScan() {
+  queue = [];
+  currentIdx = 0;
+  document.getElementById('drop-zone').style.display = 'block';
+  document.getElementById('batch-area').style.display = 'none';
+  document.getElementById('results-area').style.display = 'none';
+  document.getElementById('upload-badge').textContent = 'No files selected';
+  document.getElementById('upload-badge').className = 'step-badge step-wait';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('thumb-strip').innerHTML = '';
+}
+
+function loadContacts() {
+  fetch('/api/contacts').then(r => r.json()).then(data => {
+    allContacts = data;
+    renderContacts(data);
+    document.getElementById('contact-count').textContent = data.length;
+  });
+}
+
+function renderContacts(contacts) {
+  const body = document.getElementById('contacts-body');
+  if (!contacts.length) {
+    body.innerHTML = '<div class="empty-state"><div class="es-icon">📭</div><p>No contacts yet. Scan a card to get started!</p></div>';
+    return;
+  }
+  body.innerHTML = `<table>
+    <tr><th>Contact</th><th>Company</th><th>Email</th><th>Mobile</th><th>Language</th></tr>
+    ${contacts.map((c, i) => {
+      const initials = (c.name_kr || c.name_en || '?')[0];
+      const color = COLORS[i % COLORS.length];
+      const hasKr = c.name_kr;
+      const lang = hasKr ? '<span class="badge bg-purple">KR+EN</span>' : '<span class="badge bg-blue">EN</span>';
+      return `<tr onclick="openDetail(${i})">
+        <td><div class="contact-cell">
+          <div class="avatar" style="background:${color}">${initials}</div>
+          <div>
+            <div class="cn">${c.name_en || c.name_kr || '—'}</div>
+            ${c.name_kr ? `<div class="ck">${c.name_kr}</div>` : ''}
+          </div>
+        </div></td>
+        <td><div>${c.company_en || '—'}</div>${c.company_kr ? `<div class="ck">${c.company_kr}</div>` : ''}</td>
+        <td>${c.email || '—'}</td>
+        <td>${c.phone_mobile || c.phone_office || '—'}</td>
+        <td>${lang}</td>
+      </tr>`;
+    }).join('')}
+  </table>`;
+}
+
+function openDetail(i) {
+  const c = allContacts[i];
+  const color = COLORS[i % COLORS.length];
+  const initials = (c.name_kr || c.name_en || '?')[0];
+  const row = (icon, label, val) => val ? `<div class="info-row"><div class="info-icon">${icon}</div><div><div class="info-label">${label}</div><div class="info-val">${val}</div></div></div>` : '';
+  document.getElementById('detailPanel').innerHTML = `
+    <div class="detail-top">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="d-avatar" style="background:${color}">${initials}</div>
+        <div>
+          <div class="d-name">${c.name_en || c.name_kr || '—'}</div>
+          ${c.name_kr && c.name_en ? `<div class="d-name-kr">${c.name_kr}</div>` : ''}
+          <div class="d-title">${[c.title_en, c.title_kr].filter(Boolean).join(' · ') || ''}</div>
+        </div>
+      </div>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="section"><div class="section-title">Company</div>
+      ${row('🏢', '英文', c.company_en)}
+      ${row('🏢', '韓文', c.company_kr)}
+    </div>
+    <div class="section"><div class="section-title">聯絡方式</div>
+      ${row('✉️', 'Email', c.email)}
+      ${row('📱', 'Mobile', c.phone_mobile)}
+      ${row('📞', 'Office', c.phone_office)}
+      ${row('📠', 'Fax', c.phone_fax)}
+      ${row('📸', 'Instagram', c.instagram)}
+      ${row('🌐', 'Website', c.website)}
+    </div>
+    ${c.address ? `<div class="section"><div class="section-title">Address</div>${row('📍', '', c.address)}</div>` : ''}
+    ${c.notes ? `<div class="section"><div class="section-title">Notes</div>${row('📝', '', c.notes)}</div>` : ''}
+  `;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+}
+
+function updateCount() {
+  fetch('/api/contacts').then(r => r.json()).then(d => {
+    document.getElementById('contact-count').textContent = d.length;
+  });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+updateCount();
+
+// ── PAIR PAGE ──
+let pairItems = [];   // [{file, url, id}]
+let pairGroups = [];  // [{a: id, b: id}]
+let selectedId = null;
+let pairResults = [];
+
+function loadPairFiles(files) {
+  pairItems = Array.from(files).map((f, i) => ({ file: f, url: URL.createObjectURL(f), id: i }));
+  pairGroups = [];
+  selectedId = null;
+  document.getElementById('pair-instructions').style.display = 'none';
+  document.getElementById('pair-grid-area').style.display = 'block';
+  document.getElementById('pair-scan-btn').style.display = 'inline-flex';
+  document.getElementById('pair-progress-area').style.display = 'none';
+  document.getElementById('pair-results-area').style.display = 'none';
+  document.getElementById('pair-csv-btn').style.display = 'none';
+  renderPairGrid();
+}
+
+function pairedIds() {
+  return new Set(pairGroups.flatMap(g => [g.a, g.b]));
+}
+
+function renderPairGrid() {
+  const paired = pairedIds();
+  const singles = pairItems.filter(it => !paired.has(it.id));
+  document.getElementById('pair-status').textContent = `${pairItems.length} photos · ${pairGroups.length} pairs · ${singles.length} singles`;
+
+  // Groups
+  document.getElementById('pair-groups').innerHTML = pairGroups.map((g, gi) => {
+    const a = pairItems.find(x => x.id === g.a);
+    const b = pairItems.find(x => x.id === g.b);
+    return `<div style="position:relative;display:inline-flex;align-items:center;">
+      <div class="pair-group">
+        <div class="pair-thumb"><img src="${a.url}"><div class="pair-thumb-label">${a.file.name}</div></div>
+        <div class="pair-link-icon">🔗</div>
+        <div class="pair-thumb"><img src="${b.url}"><div class="pair-thumb-label">${b.file.name}</div></div>
+      </div>
+      <button class="pair-unlink" onclick="unlinkPair(${gi})" title="Unlink">✕</button>
+    </div>`;
+  }).join('');
+
+  // Singles
+  document.getElementById('pair-singles').innerHTML = singles.map(it => {
+    const isSel = selectedId === it.id;
+    return `<div class="pair-thumb${isSel ? ' selected' : ''}" onclick="selectForPair(${it.id})">
+      <img src="${it.url}">
+      <div class="pair-thumb-label">${it.file.name}</div>
+      ${isSel ? '<div class="pair-badge" style="background:#6366f1;color:white;">selected</div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+function selectForPair(id) {
+  if (selectedId === null) {
+    selectedId = id;
+    renderPairGrid();
+  } else if (selectedId === id) {
+    selectedId = null;
+    renderPairGrid();
+  } else {
+    pairGroups.push({ a: selectedId, b: id });
+    selectedId = null;
+    renderPairGrid();
+  }
+}
+
+function unlinkPair(gi) {
+  pairGroups.splice(gi, 1);
+  renderPairGrid();
+}
+
+async function startPairScan() {
+  document.getElementById('pair-scan-btn').style.display = 'none';
+  document.getElementById('pair-progress-area').style.display = 'block';
+  pairResults = [];
+
+  const paired = pairedIds();
+  const singles = pairItems.filter(it => !paired.has(it.id));
+  const total = pairGroups.length + singles.length;
+  let done = 0;
+
+  function updateBar() {
+    const pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById('pair-progress-bar').style.width = pct + '%';
+    document.getElementById('pair-progress-title').textContent = `Processing ${done}/${total}...`;
+  }
+  updateBar();
+
+  // Scan pairs
+  for (const g of pairGroups) {
+    const a = pairItems.find(x => x.id === g.a);
+    const b = pairItems.find(x => x.id === g.b);
+    let data = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const fd = new FormData();
+        fd.append('files', a.file);
+        fd.append('files', b.file);
+        const r = await fetch('/api/scan-pair', { method: 'POST', body: fd });
+        data = await r.json();
+        if (!data.error) break;
+        await new Promise(res => setTimeout(res, 1500));
+      } catch(e) { await new Promise(res => setTimeout(res, 1500)); }
+    }
+    if (data && !data.error) pairResults.push({ ...data.contact, _paired: true });
+    done++; updateBar();
+  }
+
+  // Scan singles
+  for (const it of singles) {
+    let data = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const fd = new FormData();
+        fd.append('file', it.file);
+        const r = await fetch('/api/scan', { method: 'POST', body: fd });
+        data = await r.json();
+        if (!data.error) break;
+        await new Promise(res => setTimeout(res, 1500));
+      } catch(e) { await new Promise(res => setTimeout(res, 1500)); }
+    }
+    if (data && !data.error) pairResults.push(data.contact);
+    done++; updateBar();
+  }
+
+  document.getElementById('pair-progress-title').textContent = `Done — ${pairResults.length} contacts`;
+  showPairResults();
+}
+
+function showPairResults() {
+  document.getElementById('pair-results-area').style.display = 'block';
+  document.getElementById('pair-csv-btn').style.display = 'inline-flex';
+  const cols = ['name_en','name_kr','title_en','title_kr','company_en','company_kr','email','phone_mobile','phone_office','phone_fax','address','website','instagram','notes'];
+  const headers = ['Card','Name (EN)','Name (KR)','Title (EN)','Title (KR)','Company (EN)','Company (KR)','Email','Mobile','Office','Fax','Address','Website','Instagram','Notes'];
+  document.getElementById('pair-results-body').innerHTML = `<div style="overflow-x:auto;"><table>
+    <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+    ${pairResults.map(c => `<tr${c._paired ? ' style="background:#f0fdf4"' : ''}>
+      <td style="white-space:nowrap">
+        ${c.card_image ? `<a href="${c.card_image}" target="_blank"><img src="${c.card_image}" style="height:40px;border-radius:4px;object-fit:cover;"></a>` : ''}
+        ${c.card_image_back ? `<a href="${c.card_image_back}" target="_blank"><img src="${c.card_image_back}" style="height:40px;border-radius:4px;object-fit:cover;margin-left:2px;"></a>` : ''}
+        ${c._paired ? '<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 4px;border-radius:4px;margin-left:2px;">paired</span>' : ''}
+      </td>
+      ${cols.map(col => `<td>${c[col] || '—'}</td>`).join('')}
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+function downloadPairCSV() {
+  if (!pairResults.length) return;
+  const cols = ['name_en','name_kr','title_en','title_kr','company_en','company_kr','email','phone_mobile','phone_office','phone_fax','address','website','instagram','notes','card_path','card_path_back'];
+  const headers = ['Name (EN)','Name (KR)','Title (EN)','Title (KR)','Company (EN)','Company (KR)','Email','Mobile','Office','Fax','Address','Website','Instagram','Notes','Card Image (Front)','Card Image (Back)'];
+  const rows = [headers, ...pairResults.map(c => cols.map(col => `"${(c[col] || '').replace(/"/g, '""')}"`)  )];
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'contacts_paired_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+</script>
+</body>
+</html>
