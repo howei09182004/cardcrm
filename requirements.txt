@@ -3,4 +3,5 @@ google-genai
 opencv-python-headless
 numpy
 gunicorn
-gevent
+openpyxl
+python-dotenv
